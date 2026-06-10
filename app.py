@@ -59,10 +59,11 @@ st.markdown(
 PALETTE = px.colors.qualitative.Set2
 TEMPLATE = "plotly_dark"
 
-# Archivos esperados (mismo directorio que app.py)
+# Archivos esperados (mismo directorio que app.py).
+# Se cargan como .zip para no superar el límite de tamaño de GitHub.
 DATA_FILES = {
-    2025: "wfp_food_prices_global_2025.csv",
-    2026: "wfp_food_prices_global_2026.csv",
+    2025: "wfp_food_prices_global_2025.zip",
+    2026: "wfp_food_prices_global_2026.zip",
 }
 
 
@@ -92,6 +93,25 @@ def _parse_unit(u: str):
     return simple.get(u.upper(), (None, None))
 
 
+def _read_table(fname: str) -> pd.DataFrame:
+    """Lee un dataset desde .zip (busca el CSV interno) o .csv directo.
+
+    Es robusto al nombre del archivo dentro del ZIP: toma el primer .csv
+    que encuentre, sin importar cómo se llame internamente.
+    """
+    if fname.lower().endswith(".zip"):
+        import zipfile
+        with zipfile.ZipFile(fname) as z:
+            csv_inside = [n for n in z.namelist()
+                          if n.lower().endswith(".csv")]
+            if not csv_inside:
+                st.error(f"El ZIP {fname} no contiene ningún archivo .csv.")
+                st.stop()
+            with z.open(csv_inside[0]) as f:
+                return pd.read_csv(f)
+    return pd.read_csv(fname)
+
+
 @st.cache_data(show_spinner="Cargando y normalizando datos...")
 def load_data() -> pd.DataFrame:
     frames = []
@@ -100,7 +120,7 @@ def load_data() -> pd.DataFrame:
             st.error(f"No se encontró el archivo: {fname}. "
                      "Colócalo en la misma carpeta que app.py.")
             st.stop()
-        d = pd.read_csv(fname)
+        d = _read_table(fname)
         d["year"] = year
         frames.append(d)
     df = pd.concat(frames, ignore_index=True)
@@ -253,6 +273,7 @@ st.markdown(
     f"**Alcance:** {title_scope}  ·  **Año:** {year_opt}  ·  "
     f"**Base:** {unit_label}  ·  **Tipo:** {ptype}"
 )
+st.caption("Autores: **Sandoval-Sampedro**")
 
 if fdf.empty:
     st.warning("No hay datos para la combinación de filtros seleccionada. "
@@ -407,6 +428,8 @@ with st.expander("🔎 Ver datos detallados / descargar"):
 
 st.markdown(
     "<br><center><sub>Fuente: World Food Programme (WFP) · Kaggle · "
-    "Precios normalizados a USD por unidad base.</sub></center>",
+    "Precios normalizados a USD por unidad base.<br>"
+    "Elaborado por <b>Sandoval-Sampedro</b></sub></center>",
     unsafe_allow_html=True,
 )
+
